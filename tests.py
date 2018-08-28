@@ -1,11 +1,14 @@
 """ Tests for configure"""
-
-from unittest import TestCase as BaseTestCase
-from configure import Configuration, Ref, Factory
-from os import path
 from datetime import timedelta
+from unittest import TestCase as BaseTestCase
+
+import os
+from os import path
+
+from configure import Configuration, Factory
 
 TEST_CONCAT_STRING = "base_test"
+
 
 class A(object):
 
@@ -119,22 +122,28 @@ b: !obj:tests.a
         self.assertTrue(c.b is a)
 
     def test_concat(self):
+        os.environ['TEST_CONCAT_ENVVAR_1_1'] = 'test_1'
+        os.environ['TEST_CONCAT_ENVVAR_1_2'] = 'test_2'
+
         c = self.config("""
 a: !concat tests.TEST_CONCAT_STRING "/test1"
-b: !concat tests.TEST_CONCAT_STRING '/test2' "/test3/" tests.TEST_CONCAT_STRING
+b: !concat ENV:TEST_CONCAT_ENVVAR_1_1  '/test2' "/test3/" ENV:TEST_CONCAT_ENVVAR_1_2
         """)
         c.configure()
         self.assertEqual(c.a, "base_test/test1")
-        self.assertEqual(c.b, "base_test/test2/test3/base_test")
+        self.assertEqual(c.b, "test_1/test2/test3/test_2")
 
     def test_concat_implicit_resolver(self):
+        os.environ['TEST_CONCAT_ENVVAR_2_1'] = 'test_1'
+        os.environ['TEST_CONCAT_ENVVAR_2_2'] = 'test_2'
+
         c = self.config("""
 a: tests.TEST_CONCAT_STRING "/test1"
-b: tests.TEST_CONCAT_STRING '/test2' "/test3/" tests.TEST_CONCAT_STRING
+b: ENV:TEST_CONCAT_ENVVAR_2_1 '/test2' "/test3/" ENV:TEST_CONCAT_ENVVAR_2_2
         """)
         c.configure()
         self.assertEqual(c.a, "base_test/test1")
-        self.assertEqual(c.b, "base_test/test2/test3/base_test")
+        self.assertEqual(c.b, "test_1/test2/test3/test_2")
 
     def test_load_from_file(self):
         filename = path.join(path.dirname(__file__), 'examples', 'example.default.conf')
@@ -155,3 +164,24 @@ b: tests.TEST_CONCAT_STRING '/test2' "/test3/" tests.TEST_CONCAT_STRING
         self.assertEqual(c.b, timedelta(days=1))
         self.assertEqual(c.c, "value")
 
+    def test_envvar(self):
+        os.environ['TEST_ENVVAR_1_1'] = 'test_1'
+        os.environ['TEST_ENVVAR_1_2'] = 'test_2'
+        c = self.config("""
+a: !envvar TEST_ENVVAR_1_1
+b: !envvar TEST_ENVVAR_1_2
+        """)
+        c.configure()
+        self.assertEqual(c.a, "test_1")
+        self.assertEqual(c.b, "test_2")
+
+    def test_envvar_implicit_resolver(self):
+        os.environ['TEST_ENVVAR_2_1'] = 'test_1'
+        os.environ['TEST_ENVVAR_2_2'] = 'test_2'
+        c = self.config("""
+a: ENV:TEST_ENVVAR_2_1
+b: ENV:TEST_ENVVAR_2_2
+        """)
+        c.configure()
+        self.assertEqual(c.a, "test_1")
+        self.assertEqual(c.b, "test_2")
