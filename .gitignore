@@ -6,3 +6,6 @@ zvqavatar.conf
 _build
 .project
 .pydevproject
+.idea
+.pytest_cache
+build/

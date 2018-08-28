@@ -4,15 +4,16 @@
     ===================================================
 
 """
-
 import sys
-from os import path, mkdir
-from inspect import getargspec
-from types import FunctionType
-from re import compile as re_compile
-from collections import MutableMapping, Mapping
+from collections import Mapping, MutableMapping
 from datetime import timedelta
+from inspect import getargspec
+
+import os
 import re
+from os import mkdir, path
+from re import compile as re_compile
+from types import FunctionType
 
 try:
     from yaml import CLoader as Loader
@@ -23,14 +24,14 @@ __all__ = (
     "Configuration", "ConfigurationError", "configure_logging",
     "format_config", "print_config", "import_string", "ImportStringError")
 
+__version__ = '0.6.0'
+
 
 class ConfigurationError(ValueError):
-
     """ Configuration error"""
 
 
 class Configuration(MutableMapping):
-
     """ Configuration object
 
     You should never instantiate this object but use ``from_file``,
@@ -272,7 +273,7 @@ class Configuration(MutableMapping):
 
     @classmethod
     def add_constructor(cls, name):
-        if not '_constructors' in cls.__dict__:
+        if '_constructors' not in cls.__dict__:
             cls.__dict__['_constructors'] = dict(cls._constructors)
         cname = '!%s' % name
 
@@ -281,11 +282,12 @@ class Configuration(MutableMapping):
                 raise ValueError("constructor '%s' already exist")
             cls._constructors[cname] = func
             return func
+
         return registration
 
     @classmethod
     def add_implicit_resolver(cls, name, pattern):
-        if not '_implicit_resolvers' in cls.__dict__:
+        if '_implicit_resolvers' not in cls.__dict__:
             cls.__dict__['_implicit_resolvers'] = dict(cls._implicit_resolvers)
         cname = '!%s' % name
 
@@ -293,7 +295,7 @@ class Configuration(MutableMapping):
 
     @classmethod
     def add_multi_constructor(cls, name):
-        if not '_multi_constructors' in cls.__dict__:
+        if '_multi_constructors' not in cls.__dict__:
             cls.__dict__['_multi_constructors'] = dict(cls._multi_constructors)
         cname = '!%s:' % name
 
@@ -302,6 +304,7 @@ class Configuration(MutableMapping):
                 raise ValueError("multiconstructor '%s' already exist")
             cls._multi_constructors[cname] = func
             return func
+
         return registration
 
 
@@ -341,20 +344,24 @@ def _concatenate_var_constructor(loader, node):
 
     if not isinstance(node, str) or not node:
         raise ConfigurationError(
-            "value '%s' cannot be interpreted as concatenation variables" % item)
+            "value '%s' cannot be interpreted as concatenation variables".format(node))
 
     items = [item.strip() for item in node.split(' ') if item.strip() != '']
     result = []
     for item in items:
         if item[0] in ['"', "'"]:
             result.append(item.strip('"\''))
+        elif item.startswith('ENV:'):
+            result.append(get_envvar(item))
         else:
             result.append(import_string(item))
 
     return "".join(result)
 
-_concatenate_var_pattern = re.compile(r'^[a-zA-Z0-9\.\_]+ [\"\'][^\"]*[\"\'].*')
+
+_concatenate_var_pattern = re.compile(r'^([a-zA-Z0-9\.\_]+|ENV\:[A-Z0-9\_]+) [\"\'][^\"]*[\"\'].*')
 Configuration.add_implicit_resolver('concat', _concatenate_var_pattern)
+
 
 @Configuration.add_constructor('bytesize')
 def _bytesize_constructor(loader, node):
@@ -421,6 +428,21 @@ def _directory_constructor(loader, node):
     return item
 
 
+@Configuration.add_constructor('envvar')
+def _env_var_constructor(loader, node):
+    node = loader.construct_scalar(node)
+
+    if not isinstance(node, str) or not node:
+        raise ConfigurationError(
+            "value '%s' cannot be interpreted as environment variable" % node)
+
+    return get_envvar(node)
+
+
+_env_var_pattern = re.compile(r'^ENV\:[A-Z0-9\_]+$')
+Configuration.add_implicit_resolver('envvar', _env_var_pattern)
+
+
 class Directive(object):
 
     def __call__(self, ctx):
@@ -442,6 +464,7 @@ class Ref(Directive):
         return '%s(%s)' % (self.__class__.__name__, self.ref)
 
     __repr__ = __str__
+
 
 @Configuration.add_multi_constructor('ref')
 def _ref_constructor(loader, tag, node):
@@ -474,7 +497,7 @@ class Factory(Directive):
         pos_cut = len(argspec.args) - len(argspec.defaults or [])
 
         for a in argspec.args[:pos_cut]:
-            if not a in config:
+            if a not in config:
                 raise ConfigurationError(
                     "missing '%s' argument for %s" % (a, factory))
             arg = config.pop(a)
@@ -629,7 +652,6 @@ def import_string(import_name, silent=False):
 
 
 class ImportStringError(ImportError):
-
     """Provides information about a failed :func:`import_string` attempt.
 
     :copyright: (c) 2011 by the Werkzeug Team
@@ -673,6 +695,17 @@ class ImportStringError(ImportError):
     def __repr__(self):
         return '<%s(%r, %r)>' % (self.__class__.__name__, self.import_name,
                                  self.exception)
+
+
+def get_envvar(envvar, silent=False):
+    try:
+        if envvar.startswith('ENV:'):
+            envvar = envvar[len('ENV:'):]
+        return os.environ[envvar]
+    except KeyError:
+        if silent:
+            return ''
+        raise ConfigurationError('Environment variable `{}` does not set'.format(envvar))
 
 
 def format_config(config, _lvl=0):
@@ -725,46 +758,46 @@ def configure_logging(logcfg=None, disable_existing_loggers=True):
 
     logcfg = dict(logcfg)
 
-    if not "version" in logcfg:
+    if "version" not in logcfg:
         logcfg["version"] = 1
 
-    if not "disable_existing_loggers" in logcfg:
+    if "disable_existing_loggers" not in logcfg:
         logcfg["disable_existing_loggers"] = disable_existing_loggers
 
     # formatters
 
-    if not "formatters" in logcfg:
+    if "formatters" not in logcfg:
         logcfg["formatters"] = {}
 
-    if not "brief" in logcfg["formatters"]:
+    if "brief" not in logcfg["formatters"]:
         logcfg["formatters"]["brief"] = {
             "format": "%(message)s",
         }
 
-    if not "precise" in logcfg["formatters"]:
+    if "precise" not in logcfg["formatters"]:
         logcfg["formatters"]["precise"] = {
             "format": "%(asctime)s %(levelname)-8s %(name)-15s %(message)s",
         }
 
     # handlers
 
-    if not "root" in logcfg:
+    if "root" not in logcfg:
         logcfg["root"] = {
             "handlers": ["console"],
             "level": "NOTSET",
         }
 
-    if not "handlers" in logcfg:
+    if "handlers" not in logcfg:
         logcfg["handlers"] = {}
 
-    if not "syslog" in logcfg["handlers"]:
+    if "syslog" not in logcfg["handlers"]:
         logcfg["handlers"]["syslog"] = {
             "class": "logging.handlers.SysLogHandler",
             "formatter": "precise",
             "level": "NOTSET",
         }
 
-    if not "console" in logcfg["handlers"]:
+    if "console" not in logcfg["handlers"]:
         logcfg["handlers"]["console"] = {
             "class": "logging.StreamHandler",
             "formatter": "precise",
