@@ -1,9 +1,10 @@
 """ Tests for configure"""
-from datetime import timedelta
-from unittest import TestCase as BaseTestCase
-
 import os
+import re
+from datetime import timedelta
 from os import path
+from pathlib import Path
+from unittest import TestCase as BaseTestCase
 
 from configure import Configuration, ConfigurationError, Factory
 
@@ -195,6 +196,15 @@ b: !envvar TEST_ENVVAR_DEF_2?="test 2"
         self.assertEqual(c.a, "1")
         self.assertEqual(c.b, "test 2")
 
+    def test_envvar_with_default_escaped(self):
+        c = self.config("""
+a: !envvar TEST_ENVVAR_DEF_2?="test \\"1\\""
+b: !envvar TEST_ENVVAR_DEF_2?="test\\\\2"
+        """)
+        c.configure()
+        self.assertEqual(c.a, 'test "1"')
+        self.assertEqual(c.b, "test\\2")
+
     def test_envvar_with_default_none(self):
         c = self.config("""
 a: !envvar TEST_ENVVAR_DEF_NONE?=
@@ -206,7 +216,7 @@ b: !envvar TEST_ENVVAR_DEF_EMPTY?=""
 
     def test_envvar_with_no_default(self):
         with self.assertRaises(ConfigurationError):
-            c = self.config("""
+            self.config("""
 a: !envvar TEST_ENVVAR_NO_DEF
             """)
 
@@ -218,3 +228,85 @@ b: ENV:TEST_ENVVAR_IMP_RESOLVER_DEF_2?="test_2"
         c.configure()
         self.assertEqual(c.a, "1")
         self.assertEqual(c.b, "test_2")
+
+    def test_envvar_implicit_resolver_with_no_default(self):
+        with self.assertRaises(ConfigurationError):
+            self.config("""
+a: ENV:TEST_ENVVAR_NO_DEF
+            """)
+
+    def test_bytesize(self):
+        c = self.config("""
+a: !bytesize 13
+b: !bytesize 54k
+c: !bytesize 4.5PB
+        """)
+        c.configure()
+        self.assertEqual(c.a, 13)
+        self.assertEqual(c.b, 54 * 1024)
+        self.assertEqual(c.c, round(4.5 * 1024 ** 5))
+
+    def test_bytesize_invalid_float(self):
+        with self.assertRaises(ConfigurationError):
+            self.config("""
+a: !bytesize 13.4
+            """)
+
+    def test_bytesize_invalid_level(self):
+        with self.assertRaises(ConfigurationError):
+            self.config("""
+a: !bytesize 13.4ub
+            """)
+
+    def test_regex(self):
+        c = self.config("""
+a: !re ^\\d$
+        """)
+        c.configure()
+        if hasattr(re, 'Pattern'):
+            self.assertIsInstance(c.a, re.Pattern)
+        else:
+            self.assertTrue(hasattr(c.a, 'match'))
+        self.assertIsNotNone(c.a.match('5'))
+        self.assertIsNone(c.a.match('56'))
+
+    def test_regex_scalar_fail(self):
+        with self.assertRaises(ConfigurationError):
+            self.config("""
+a: !re
+            """)
+
+    def test_directory(self):
+        base_path = Path(__file__).parent.absolute()
+
+        c = self.config("""
+a: !directory /tmp
+b: !directory data/test
+        """,
+                        ctx={'pwd': str(base_path)})
+        c.configure()
+
+        self.assertEqual(c.a, '/tmp')
+        b_path = Path(__file__).parent.absolute() / 'data' / 'test'
+        self.assertEqual(c.b, str(b_path))
+        self.assertTrue(b_path.exists())
+        self.assertTrue(b_path.is_dir())
+        b_path.rmdir()
+
+    def test_directory_is_file_fail(self):
+        base_path = Path(__file__).parent.absolute()
+
+        with self.assertRaises(ConfigurationError):
+            self.config("""
+a: !directory tests.py
+            """,
+                        ctx={'pwd': str(base_path)})
+
+    def test_directory_none_fail(self):
+        base_path = Path(__file__).parent.absolute()
+
+        with self.assertRaises(ConfigurationError):
+            self.config("""
+a: !directory
+                """,
+                        ctx={'pwd': str(base_path)})
