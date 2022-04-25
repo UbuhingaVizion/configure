@@ -1,55 +1,49 @@
-import ast
-
 import os
-from setuptools import setup
+from pathlib import Path
 
-PACKAGE_NAME = 'whalesong'
+from setuptools import find_packages, setup
 
-path = os.path.join(os.path.dirname(__file__), 'configure.py')
+import setup_utils
 
-with open(path, 'r') as file:
-    t = compile(file.read(), path, 'exec', ast.PyCF_ONLY_AST)
-    for node in (n for n in t.body if isinstance(n, ast.Assign)):
-        if len(node.targets) != 1:
-            continue
+PACKAGE_DIR = os.environ['PACKAGE_DIR']
+PACKAGE_NAME = os.environ['PACKAGE_NAME']
+PACKAGE_DESCRIPTION = os.environ['PACKAGE_DESCRIPTION']
+PACKAGE_REPOSITORY = os.environ['PACKAGE_REPOSITORY']
+PACKAGE_AUTHOR_EMAIL = os.environ['PACKAGE_AUTHOR_EMAIL']
+PACKAGE_AUTHOR = os.environ['PACKAGE_AUTHOR']
 
-        name = node.targets[0]
-        if not isinstance(name, ast.Name) or \
-                name.id not in ('__version__', '__version_info__', 'VERSION'):
-            continue
+version_file = Path(__file__).parent / 'configure.py'
 
-        v = node.value
-        if isinstance(v, ast.Str):
-            version = v.s
-            break
-        if isinstance(v, ast.Tuple):
-            r = []
-            for e in v.elts:
-                if isinstance(e, ast.Str):
-                    r.append(e.s)
-                elif isinstance(e, ast.Num):
-                    r.append(str(e.n))
-            version = '.'.join(r)
-            break
+version = setup_utils.get_version_from_file(version_file)
 
-# Get the long description from the README file
-with open(os.path.join(os.path.dirname(__file__), 'README.rst'), encoding='utf-8') as f:
-    long_description = f.read()
+if os.environ.get('PACKAGE_DEVELOPMENT') is not None:
+    version = setup_utils.get_development_version_from_file(version_file,
+                                                            int(os.environ.get('PACKAGE_DEVELOPMENT')),
+                                                            os.environ.get('PACKAGE_COMMIT'))
+
+    setup_utils.set_version_to_file(version_file, version)
+
+requirements = setup_utils.get_requirements_from_file(Path(__file__).parent / 'requirements.txt')
 
 setup(
-    name="configure-fork",
+    name=PACKAGE_NAME,
+    url=PACKAGE_REPOSITORY,
+    author=PACKAGE_AUTHOR,
     version=version,
-    description="configuration toolkit based on YAML",
-    long_description=long_description,
-    author="Andrey Popp, Alexander Solovyov, Alfred Santacatalina",
-    author_email="Andrey Popp <8mayday@gmail.com>, Alexander Solovyov <alexander@solovyov.net>, Alfred Santacatalina <alfred82santa@gmail.com>",
-    url='https://github.com/alfred82santa/configure',
-    py_modules=["configure"],
-    test_suite="tests",
-    install_requires=["pyyaml"],
+    author_email=PACKAGE_AUTHOR_EMAIL,
     classifiers=[
-        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
+        'Programming Language :: Python',
         'Programming Language :: Python :: 3.6',
-    ],
-    zip_safe=False)
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Development Status :: 4 - Beta'],
+    packages=find_packages(include=[f'{PACKAGE_DIR}*']),
+    install_requires=requirements,
+    description=PACKAGE_DESCRIPTION,
+    long_description=(Path(__file__).parent / 'README.rst').read_text(),
+    long_description_content_type='text/x-rst',
+    zip_safe=True
+)

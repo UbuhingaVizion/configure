@@ -39,6 +39,12 @@ Changelog
 
         config_field_1:!envvar MY_ENV_VAR_1?=1
         config_field_2: ENV:MY_ENV_VAR_2?="my value"
+        config_field_3: ENV:MY_ENV_VAR_3?="with \"escaped\" chars \\"
+* Github Actions to check PR and publish packages.
+* Development version publishing.
+* Tests for bytesize and regex resolvers.
+* Refactor of directory resolver.
+
 
 
 0.6.0

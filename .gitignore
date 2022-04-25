@@ -8,4 +8,5 @@ _build
 .pydevproject
 .idea
 .pytest_cache
+.coverage
 build/

@@ -7,19 +7,21 @@
 import os
 import re
 import sys
+
 try:
     from collections.abc import Mapping, MutableMapping
-except ImportError:
+except ImportError:  # pragma: no cover
     from collections import Mapping, MutableMapping
+
 from datetime import timedelta
-from inspect import getargspec
-from os import mkdir, path
+from inspect import getfullargspec
+from os import path
 from re import compile as re_compile
 from types import FunctionType
 
 try:
     from yaml import CLoader as Loader
-except ImportError:
+except ImportError:  # pragma: no cover
     from yaml import Loader
 
 __all__ = (
@@ -346,7 +348,7 @@ def _concatenate_var_constructor(loader, node):
 
     if not isinstance(node, str) or not node:
         raise ConfigurationError(
-            "value '%s' cannot be interpreted as concatenation variables".format(node))
+            "value '{}' cannot be interpreted as concatenation variables".format(node))
 
     items = [item.strip() for item in node.split(' ') if item.strip() != '']
     result = []
@@ -354,7 +356,7 @@ def _concatenate_var_constructor(loader, node):
         if item[0] in ['"', "'"]:
             result.append(item.strip('"\''))
         elif item.startswith('ENV:'):
-            result.append(get_envvar(item, silent=True))
+            result.append(get_envvar(item, silent=False))
         else:
             result.append(import_string(item))
 
@@ -363,6 +365,15 @@ def _concatenate_var_constructor(loader, node):
 
 _concatenate_var_pattern = re.compile(r'^([a-zA-Z0-9\.\_]+|ENV\:[A-Z0-9\_]+) [\"\'][^\"]*[\"\'].*')
 Configuration.add_implicit_resolver('concat', _concatenate_var_pattern)
+
+BYTE_SIZE_LEVELS = (
+    'b', 'k', 'm', 'g', 't', 'p'
+)
+
+_bytesize_string_pattern = re.compile(
+    r'^(?P<size>\d+(?:\.\d+)?)(?:(?P<level_1>b)|(?P<level_2>[{}])b?)?$'.format(''.join(BYTE_SIZE_LEVELS[1:])),
+    flags=re.IGNORECASE
+)
 
 
 @Configuration.add_constructor('bytesize')
@@ -373,40 +384,29 @@ def _bytesize_constructor(loader, node):
         raise ConfigurationError(
             "value '%s' cannot be interpreted as byte size" % item)
 
-    if item.isdigit():
-        return int(item)  # bytes
-
-    num, typ = item[:-1], item[-1].lower()
-
-    if item[-2:].lower() in ('kb', 'mb', 'gb', 'tb', 'pb'):
-        num, typ = item[:-2], item[-2:-1].lower()
-    elif item[-1:].lower() in ('k', 'm', 'b', 't', 'p', 'b'):
-        num, typ = item[:-1], item[-1].lower()
-    else:
+    match = _bytesize_string_pattern.match(item.strip())
+    if not match:
         raise ConfigurationError(
             "value '%s' cannot be interpreted as byte size" % item)
 
-    if not num.isdigit():
-        raise ConfigurationError(
-            "value '%s' cannot be interpreted as byte size" % item)
+    num = match.group('size')
+    lvl = match.group('level_1') or match.group('level_2')
+    if lvl is None:
+        if num.isdigit():
+            return int(num)  # bytes
+        else:
+            raise ConfigurationError(
+                "value '%s' cannot be interpreted as byte size" % item)
 
-    num = int(num)
+    lvl = lvl.lower()
+    num = float(num)
 
-    if typ == 'b':
-        return num
-    elif typ == 'k':
-        return num * 1024
-    elif typ == 'm':
-        return num * 1024 * 1024
-    elif typ == 'g':
-        return num * 1024 * 1024 * 1024
-    elif typ == 't':
-        return num * 1024 * 1024 * 1024 * 1024
-    elif typ == 'p':
-        return num * 1024 * 1024 * 1024 * 1024 * 1024
-    else:
-        raise ConfigurationError(
-            "value '%s' cannot be interpreted as byte size" % item)
+    levels = list(BYTE_SIZE_LEVELS)
+    while lvl != levels[0]:
+        num *= 1024
+        levels.pop(0)
+
+    return round(num)
 
 
 @Configuration.add_constructor('re')
@@ -418,16 +418,6 @@ def _re_constructor(loader, node):
             "value '%s' cannot be interpreted as regular expression" % item)
 
     return re_compile(item)
-
-
-@Configuration.add_constructor('directory')
-def _directory_constructor(loader, node):
-    item = loader.construct_scalar(node)
-    if not path.exists(item):
-        mkdir(item)
-    elif not path.isdir(item):
-        raise ConfigurationError("'%s' is not a directory" % item)
-    return item
 
 
 @Configuration.add_constructor('envvar')
@@ -488,10 +478,12 @@ class Factory(Directive):
             except ImportStringError as e:
                 raise ConfigurationError("cannot import factory: %s" % e)
         if isinstance(factory, FunctionType):
-            argspec = getargspec(factory)
+            argspec = getfullargspec(factory)
         elif isinstance(factory, type):
-            argspec = getargspec(factory.__init__)
+            argspec = getfullargspec(factory.__init__)
             argspec = argspec._replace(args=argspec.args[1:])
+        else:
+            raise ConfigurationError("cannot import factory type: %s" % str(self.factory))
 
         args = []
         kwargs = {}
@@ -514,7 +506,7 @@ class Factory(Directive):
                     arg = arg(ctx)
                 kwargs[a] = arg
 
-        if argspec.keywords:
+        if argspec.varkw:
             try:
                 while True:
                     k, arg = config.popitem()
@@ -573,6 +565,36 @@ class Include(Directive):
 @Configuration.add_multi_constructor('include')
 def _include_constructor(loader, tag, node):
     return Include(tag)
+
+
+class Directory(Directive):
+    def __init__(self, path: str):
+        self._path = path
+
+    def __call__(self, ctx) -> str:
+        from pathlib import Path
+
+        path = Path(self._path)
+        if not path.is_absolute():
+            path = Path(ctx._pwd) / path
+            path = path.absolute()
+
+        if not path.exists():
+            path.mkdir(parents=True, exist_ok=True)
+        elif not path.is_dir():
+            raise ConfigurationError("'%s' is not a directory" % self._path)
+        return str(path)
+
+
+@Configuration.add_constructor('directory')
+def _directory_constructor(loader, node):
+    item = loader.construct_scalar(node)
+
+    if not isinstance(item, str) or not item:
+        raise ConfigurationError(
+            "value '%s' cannot be interpreted as regular expression" % item)
+
+    return Directory(item)
 
 
 class Extends(Directive):
@@ -638,7 +660,7 @@ def import_string(import_name, silent=False):
         else:
             try:
                 return __import__(import_name)
-            except ImportError as e:
+            except ImportError:
                 return import_string('__main__.' + import_name)
         try:
             return getattr(__import__(module, None, None, [obj]), obj)
@@ -700,7 +722,7 @@ class ImportStringError(ImportError):
 
 
 ENVVAR_REGEX = re.compile(r'^(?:ENV:)?(?P<name>[a-zA-Z_][a-zA-Z_0-9]*)(?P<has_default>\?='
-                          r'(?:(?P<default_1>[^\"\s]+)|\"(?P<default_2>[^\"]*)\")?)?$')
+                          r'(?:(?P<default_1>[^\"\s]+)|\"(?P<default_2>(?:[^\"]|\\\\|\\\")*)\")?)?$')
 
 
 def get_envvar(envvar, silent=False, **kwargs):
@@ -709,6 +731,9 @@ def get_envvar(envvar, silent=False, **kwargs):
 
     if match.group('has_default'):
         kwargs['default'] = match.group('default_1') or match.group('default_2')
+
+        if kwargs['default']:
+            kwargs['default'] = kwargs['default'].replace('\\\\', '\\').replace('\\"', '"')
 
     try:
         return os.environ[envvar]
