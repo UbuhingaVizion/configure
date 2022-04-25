@@ -29,6 +29,18 @@ Installation
 Changelog
 ---------
 
+0.6.1
+-----
+
+* Fix imports in newer Python versions. Thx @TheAbhijeet.
+* Added default value for environment variables resolvers (use `?=` after variable name).
+
+    .. code-block:: yaml
+
+        config_field_1:!envvar MY_ENV_VAR_1?=1
+        config_field_2: ENV:MY_ENV_VAR_2?="my value"
+
+
 0.6.0
 -----
 

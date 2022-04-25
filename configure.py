@@ -4,6 +4,8 @@
     ===================================================
 
 """
+import os
+import re
 import sys
 try:
     from collections.abc import Mapping, MutableMapping
@@ -11,9 +13,6 @@ except ImportError:
     from collections import Mapping, MutableMapping
 from datetime import timedelta
 from inspect import getargspec
-
-import os
-import re
 from os import mkdir, path
 from re import compile as re_compile
 from types import FunctionType
@@ -27,7 +26,7 @@ __all__ = (
     "Configuration", "ConfigurationError", "configure_logging",
     "format_config", "print_config", "import_string", "ImportStringError")
 
-__version__ = '0.6.0'
+__version__ = '0.6.1'
 
 
 class ConfigurationError(ValueError):
@@ -355,7 +354,7 @@ def _concatenate_var_constructor(loader, node):
         if item[0] in ['"', "'"]:
             result.append(item.strip('"\''))
         elif item.startswith('ENV:'):
-            result.append(get_envvar(item))
+            result.append(get_envvar(item, silent=True))
         else:
             result.append(import_string(item))
 
@@ -439,10 +438,10 @@ def _env_var_constructor(loader, node):
         raise ConfigurationError(
             "value '%s' cannot be interpreted as environment variable" % node)
 
-    return get_envvar(node)
+    return get_envvar(node, silent=False)
 
 
-_env_var_pattern = re.compile(r'^ENV\:[A-Z0-9\_]+$')
+_env_var_pattern = re.compile(r'^ENV:[a-zA-Z][a-zA-Z0-9_]*(?:\?.*)?$')
 Configuration.add_implicit_resolver('envvar', _env_var_pattern)
 
 
@@ -700,12 +699,24 @@ class ImportStringError(ImportError):
                                  self.exception)
 
 
-def get_envvar(envvar, silent=False):
+ENVVAR_REGEX = re.compile(r'^(?:ENV:)?(?P<name>[a-zA-Z_][a-zA-Z_0-9]*)(?P<has_default>\?='
+                          r'(?:(?P<default_1>[^\"\s]+)|\"(?P<default_2>[^\"]*)\")?)?$')
+
+
+def get_envvar(envvar, silent=False, **kwargs):
+    match = ENVVAR_REGEX.match(envvar)
+    envvar = match.group('name')
+
+    if match.group('has_default'):
+        kwargs['default'] = match.group('default_1') or match.group('default_2')
+
     try:
-        if envvar.startswith('ENV:'):
-            envvar = envvar[len('ENV:'):]
         return os.environ[envvar]
     except KeyError:
+        try:
+            return kwargs['default']
+        except KeyError:
+            pass
         if silent:
             return ''
         raise ConfigurationError('Environment variable `{}` does not set'.format(envvar))

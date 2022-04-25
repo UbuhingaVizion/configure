@@ -5,7 +5,7 @@ from unittest import TestCase as BaseTestCase
 import os
 from os import path
 
-from configure import Configuration, Factory
+from configure import Configuration, ConfigurationError, Factory
 
 TEST_CONCAT_STRING = "base_test"
 
@@ -184,4 +184,37 @@ b: ENV:TEST_ENVVAR_2_2
         """)
         c.configure()
         self.assertEqual(c.a, "test_1")
+        self.assertEqual(c.b, "test_2")
+
+    def test_envvar_with_default(self):
+        c = self.config("""
+a: !envvar TEST_ENVVAR_DEF_1?=1
+b: !envvar TEST_ENVVAR_DEF_2?="test 2"
+        """)
+        c.configure()
+        self.assertEqual(c.a, "1")
+        self.assertEqual(c.b, "test 2")
+
+    def test_envvar_with_default_none(self):
+        c = self.config("""
+a: !envvar TEST_ENVVAR_DEF_NONE?=
+b: !envvar TEST_ENVVAR_DEF_EMPTY?=""
+        """)
+        c.configure()
+        self.assertIsNone(c.a)
+        self.assertEqual(c.b, "")
+
+    def test_envvar_with_no_default(self):
+        with self.assertRaises(ConfigurationError):
+            c = self.config("""
+a: !envvar TEST_ENVVAR_NO_DEF
+            """)
+
+    def test_envvar_implicit_resolver_with_default(self):
+        c = self.config("""
+a: ENV:TEST_ENVVAR_IMP_RESOLVER_DEF_1?=1
+b: ENV:TEST_ENVVAR_IMP_RESOLVER_DEF_2?="test_2"
+        """)
+        c.configure()
+        self.assertEqual(c.a, "1")
         self.assertEqual(c.b, "test_2")
