@@ -5,7 +5,10 @@
 
 """
 import sys
-from collections import Mapping, MutableMapping
+try:
+    from collections.abc import Mapping, MutableMapping
+except ImportError:
+    from collections import Mapping, MutableMapping
 from datetime import timedelta
 from inspect import getargspec
 
