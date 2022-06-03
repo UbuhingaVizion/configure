@@ -40,7 +40,7 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Development Status :: 4 - Beta'],
-    packages=find_packages(include=[f'{PACKAGE_DIR}*']),
+    py_modules=["configure"],
     install_requires=requirements,
     description=PACKAGE_DESCRIPTION,
     long_description=(Path(__file__).parent / 'README.rst').read_text(),
