@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover
     from collections import Mapping, MutableMapping
 
 from datetime import timedelta
-from inspect import getfullargspec
+from inspect import signature
 from os import path
 from re import compile as re_compile
 from types import FunctionType
@@ -478,9 +478,9 @@ class Factory(Directive):
             except ImportStringError as e:
                 raise ConfigurationError("cannot import factory: %s" % e)
         if isinstance(factory, FunctionType):
-            argspec = getfullargspec(factory)
+            argspec = signature(factory)
         elif isinstance(factory, type):
-            argspec = getfullargspec(factory.__init__)
+            argspec = signature(factory.__init__)
             argspec = argspec._replace(args=argspec.args[1:])
         else:
             raise ConfigurationError("cannot import factory type: %s" % str(self.factory))
