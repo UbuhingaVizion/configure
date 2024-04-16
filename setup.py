@@ -9,6 +9,8 @@ version_file = Path(__file__).parent / 'configure.py'
 
 version = setup_utils.get_version_from_file(version_file)
 
+PACKAGE_NAME = 'ubuviz-configure'
+
 if os.environ.get('PACKAGE_DEVELOPMENT') is not None:
     version = setup_utils.get_development_version_from_file(version_file,
                                                             int(os.environ.get('PACKAGE_DEVELOPMENT')),
@@ -19,7 +21,7 @@ if os.environ.get('PACKAGE_DEVELOPMENT') is not None:
 requirements = setup_utils.get_requirements_from_file(Path(__file__).parent / 'requirements.txt')
 
 setup(
-    name='ubuviz-configure',
+    name=PACKAGE_NAME,
     url='https://github.com/alfred82santa/configure',
     author='Andrey Popp, Alexander Solovyov, Alfred Santacatalina',
     version=version,
