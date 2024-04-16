@@ -5,13 +5,6 @@ from setuptools import find_packages, setup
 
 import setup_utils
 
-PACKAGE_DIR = os.environ['PACKAGE_DIR']
-PACKAGE_NAME = os.environ['PACKAGE_NAME']
-PACKAGE_DESCRIPTION = os.environ['PACKAGE_DESCRIPTION']
-PACKAGE_REPOSITORY = os.environ['PACKAGE_REPOSITORY']
-PACKAGE_AUTHOR_EMAIL = os.environ['PACKAGE_AUTHOR_EMAIL']
-PACKAGE_AUTHOR = os.environ['PACKAGE_AUTHOR']
-
 version_file = Path(__file__).parent / 'configure.py'
 
 version = setup_utils.get_version_from_file(version_file)
@@ -26,11 +19,11 @@ if os.environ.get('PACKAGE_DEVELOPMENT') is not None:
 requirements = setup_utils.get_requirements_from_file(Path(__file__).parent / 'requirements.txt')
 
 setup(
-    name=PACKAGE_NAME,
-    url=PACKAGE_REPOSITORY,
-    author=PACKAGE_AUTHOR,
+    name='ubuviz-configure',
+    url='https://github.com/alfred82santa/configure',
+    author='Andrey Popp, Alexander Solovyov, Alfred Santacatalina',
     version=version,
-    author_email=PACKAGE_AUTHOR_EMAIL,
+    author_email='Andrey Popp <8mayday@gmail.com>, Alexander Solovyov <alexander@solovyov.net>, Alfred Santacatalina <alfred82santa@gmail.com>',
     classifiers=[
         'Intended Audience :: Developers',
         'Programming Language :: Python',
@@ -40,7 +33,7 @@ setup(
         'Development Status :: 4 - Beta'],
     py_modules=["configure"],
     install_requires=requirements,
-    description=PACKAGE_DESCRIPTION,
+    description='configuration toolkit based on YAML',
     long_description=(Path(__file__).parent / 'README.rst').read_text(),
     long_description_content_type='text/x-rst',
     zip_safe=True
