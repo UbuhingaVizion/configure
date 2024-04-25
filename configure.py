@@ -20,7 +20,7 @@ from re import compile as re_compile
 from types import FunctionType
 
 try:
-    from yaml import CLoader as Loader
+    from yaml import CSafeLoader as Loader
 except ImportError:  # pragma: no cover
     from yaml import Loader
 
@@ -222,8 +222,10 @@ class Configuration(MutableMapping):
             `_timedelta_constructor` and `_re_constructor` for examples.
         """
         ctx = ctx or {}
-        ctx['pwd'] = pwd
-        string = string % ctx
+        # ctx['pwd'] = pwd
+        # string = string % ctx
+        if ctx:
+            string = string.format(**ctx)
         cfg = cls.load(string, constructors=constructors,
                        multi_constructors=multi_constructors,
                        implicit_resolvers=implicit_resolvers)
@@ -240,6 +242,11 @@ class Configuration(MutableMapping):
         if configure:
             c.configure()
         return c
+
+    @classmethod
+    def to_dict(self):
+        """Converts Configuration object attributes to a dictionary."""
+        return {key: value for key, value in self.__dict__.items() if not callable(value) and not isinstance(value, (Configuration,))}
 
     @classmethod
     def load(cls, stream, constructors=None, multi_constructors=None,
