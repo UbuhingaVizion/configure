@@ -243,10 +243,15 @@ class Configuration(MutableMapping):
             c.configure()
         return c
 
-    @classmethod
     def to_dict(self):
         """Converts Configuration object attributes to a dictionary."""
-        return {key: value for key, value in self.__dict__.items() if not callable(value) and not isinstance(value, (Configuration,))}
+        converted = dict(self)
+        # We check the dict recursively
+        for k, v in converted.items():
+            if isinstance(v, self.__class__):
+                converted[k] = v.to_dict()
+
+        return converted
 
     @classmethod
     def load(cls, stream, constructors=None, multi_constructors=None,
